@@ -227,7 +227,7 @@
 
     <div class="section">
         <div class="responsive-group">
-            <input type="text" id="current-email" readonly value="Đang kết nối hệ thống Mailsac...">
+            <input type="text" id="current-email" readonly value="Đang lấy domain bypass ẩn danh...">
             <div style="display: flex; gap: 8px; min-width: 220px; justify-content: space-between;">
                 <button onclick="copyEmail()" style="flex: 1;">Copy</button>
                 <button class="btn-rgb" onclick="generateRandomEmail()" style="flex: 2;">Đổi Ngẫu Nhiên</button>
@@ -281,21 +281,29 @@
 </div>
 
 <script>
-    const API_URL = 'https://mailsac.com/api/addresses';
+    const API_URL = 'https://guerrero.to/api/v1';
     let activeEmail = "";
     let emailHistory = []; 
-    let lastMailCount = 0; 
+    let lastMailCount = 0;
+    let cachedDomains = [];
 
-    function init() {
+    async function init() {
         if (Notification.permission !== "granted" && Notification.permission !== "denied") {
             Notification.requestPermission();
         }
 
-        const savedHistory = localStorage.getItem('dgb_ms_history');
+        const savedHistory = localStorage.getItem('dgb_gr_history');
         if (savedHistory) emailHistory = JSON.parse(savedHistory);
 
-        const savedActive = localStorage.getItem('dgb_ms_active');
+        const savedActive = localStorage.getItem('dgb_gr_active');
         if (savedActive) activeEmail = savedActive;
+
+        try {
+            const res = await fetch(`${API_URL}/domains`);
+            cachedDomains = await res.json();
+        } catch(e) {
+            cachedDomains = ['guerrero.to', 'coffeepancakes.xyz', 'lizardfury.com'];
+        }
 
         if (activeEmail) {
             document.getElementById('current-email').value = activeEmail;
@@ -318,16 +326,23 @@
     }
 
     function generateRandomEmail() {
+        if(cachedDomains.length === 0) {
+            setTimeout(generateRandomEmail, 500);
+            return;
+        }
         const randUser = randomStr(9);
-        setNewEmail(`${randUser}@mailsac.com`);
+        const randDom = cachedDomains[Math.floor(Math.random() * cachedDomains.length)];
+        setNewEmail(`${randUser}@${randDom}`);
     }
 
     function createCustomEmail() {
+        if(cachedDomains.length === 0) return alert("Hệ thống chưa tải xong tên miền, vui lòng đợi vài giây!");
         const inputName = document.getElementById('custom-username').value.trim();
         if(!inputName) return alert("Vui lòng nhập tên email bạn muốn!");
         
         const cleanName = inputName.toLowerCase().replace(/[^a-z0-9.]/g, "");
-        setNewEmail(`${cleanName}@mailsac.com`);
+        const randDom = cachedDomains[Math.floor(Math.random() * cachedDomains.length)];
+        setNewEmail(`${cleanName}@${randDom}`);
         document.getElementById('custom-username').value = '';
     }
 
@@ -336,23 +351,24 @@
         document.getElementById('current-email').value = email;
         lastMailCount = 0;
 
-        localStorage.setItem('dgb_ms_active', activeEmail);
+        localStorage.setItem('dgb_gr_active', activeEmail);
 
         if (!emailHistory.includes(email)) {
             emailHistory.push(email);
-            localStorage.setItem('dgb_ms_history', JSON.stringify(emailHistory));
+            localStorage.setItem('dgb_gr_history', JSON.stringify(emailHistory));
             renderHistory();
         }
 
-        document.getElementById('mail-list-box').innerHTML = '<div class="empty-text">Hộp thư mới sẵn sàng. Đang chờ mã OTP...</div>';
+        document.getElementById('mail-list-box').innerHTML = '<div class="empty-text">Hòm thư ẩn danh đã kích hoạt. Đang đợi mã OTP...</div>';
         document.getElementById('mail-count').innerText = "0";
         checkMail();
     }
 
     async function checkMail() {
         if (!activeEmail) return;
+        const [username, domain] = activeEmail.split('@');
         try {
-            const res = await fetch(`${API_URL}/${activeEmail}/messages`);
+            const res = await fetch(`${API_URL}/mailbox/${username}/${domain}`);
             const messages = await res.json();
             
             if (!Array.isArray(messages)) return;
@@ -362,19 +378,18 @@
             const listDiv = document.getElementById('mail-list-box');
             
             if (currentCount > lastMailCount) {
-                document.title = `📩 (${currentCount}) Bạn có thư mới!`;
+                document.title = `📩 (${currentCount}) Có OTP mới!`;
                 if (Notification.permission === "granted") {
                     const latestMsg = messages[0]; 
-                    new Notification("⚡ HỆ THỐNG DGB EMAIL", {
-                        body: `Người gửi: ${latestMsg.from}\nChủ đề: ${latestMsg.subject}`,
-                        icon: "https://cdn-icons-png.flaticon.com/512/281/281769.png" 
+                    new Notification("⚡ DGB EMAIL BYPASS", {
+                        body: `Từ: ${latestMsg.from}\nTiêu đề: ${latestMsg.subject}`,
                     });
                 }
                 lastMailCount = currentCount; 
             }
 
             if (currentCount === 0) {
-                listDiv.innerHTML = '<div class="empty-text">Hộp thư sạch. Đang đợi tin nhắn từ các dịch vụ...</div>';
+                listDiv.innerHTML = '<div class="empty-text">Hộp thư trống. Đang chờ mã xác nhận...</div>';
                 lastMailCount = 0;
                 document.title = "⚡ DGB EMAIL 10P RGB ⚡";
                 return;
@@ -385,29 +400,29 @@
                 const item = document.createElement('div');
                 item.className = 'mail-item';
                 item.innerHTML = `
-                    <div class="sender">Từ: ${msg.from || 'Ẩn danh'}</div>
+                    <div class="sender">Người gửi: ${msg.from}</div>
                     <div class="subject">${msg.subject || '(Không tiêu đề)'}</div>
                 `;
-                item.onclick = () => openMail(msg._id);
+                item.onclick = () => openMail(msg.id);
                 listDiv.appendChild(item);
             });
-        } catch (error) { console.log("Đang tải dữ liệu..."); }
+        } catch (error) { console.log("Đang quét thư đến..."); }
     }
 
     async function openMail(id) {
+        const [username, domain] = activeEmail.split('@');
         try {
-            // Mailsac hỗ trợ xem dạng text/html trực tiếp không cần API key thông qua endpoint public của họ
-            const bodyUrl = `https://mailsac.com/dirty-text-body/${activeEmail}/${id}`;
-            const res = await fetch(bodyUrl);
-            const textData = await res.text();
+            const res = await fetch(`${API_URL}/message/${username}/${domain}/${id}`);
+            const mail = await res.json();
             
-            document.getElementById('modal-subject').innerText = "Nội dung thư đến";
-            document.getElementById('modal-from').innerText = `Email: ${activeEmail}`;
+            document.getElementById('modal-subject').innerText = mail.subject || '(Không tiêu đề)';
+            document.getElementById('modal-from').innerText = `Từ: ${mail.from}`;
             
-            // Xử lý xuống dòng hiển thị cho đẹp
-            document.getElementById('modal-body').innerHTML = `<div style="white-space: pre-wrap; font-family: sans-serif; font-size: 14px; color:#111;">${textData}</div>`;
+            // Render nội dung HTML hoặc Text một cách an toàn
+            const bodyContent = mail.html || mail.text.replace(/\n/g, '<br>');
+            document.getElementById('modal-body').innerHTML = `<div style="color:#111; font-family:sans-serif;">${bodyContent}</div>`;
             document.getElementById('mail-modal').style.display = 'flex';
-        } catch (e) { alert("Không thể mở nội dung thư!"); }
+        } catch (e) { alert("Lỗi khi mở nội dung email!"); }
     }
 
     function closeModal() { document.getElementById('mail-modal').style.display = 'none'; }
@@ -438,11 +453,11 @@
     }
 
     function clearHistory() {
-        if(confirm("Xóa toàn bộ lịch sử các email cũ?")) {
+        if(confirm("Xóa lịch sử dụng các email cũ?")) {
             emailHistory = [];
             activeEmail = "";
-            localStorage.removeItem('dgb_ms_history');
-            localStorage.removeItem('dgb_ms_active');
+            localStorage.removeItem('dgb_gr_history');
+            localStorage.removeItem('dgb_gr_active');
             generateRandomEmail();
         }
     }
@@ -455,7 +470,7 @@
         tempInput.select();
         document.execCommand('copy');
         document.body.removeChild(tempInput);
-        alert('Đã sao chép email! Dán vào nơi nhận để nhận mã.');
+        alert('Đã copy mail bypass! Thử dán lại vào ô đăng ký nhé.');
     }
 
     init();
