@@ -227,7 +227,7 @@
 
     <div class="section">
         <div class="responsive-group">
-            <input type="text" id="current-email" readonly value="Đang tạo email từ máy chủ 1SecMail...">
+            <input type="text" id="current-email" readonly value="Đang kết nối hòm thư...">
             <div style="display: flex; gap: 8px; min-width: 220px; justify-content: space-between;">
                 <button onclick="copyEmail()" style="flex: 1;">Copy</button>
                 <button class="btn-rgb" onclick="generateRandomEmail()" style="flex: 2;">Đổi Ngẫu Nhiên</button>
@@ -282,12 +282,12 @@
 
 <script>
     const API_URL = 'https://www.1secmail.com/api/v1/';
-    let availableDomains = [];
+    const availableDomains = ['1secmail.com', '1secmail.org', '1secmail.net', 'wwjmp.com', 'esiand.com'];
     let activeEmail = "";
     let emailHistory = []; 
     let lastMailCount = 0; 
 
-    async function init() {
+    function init() {
         if (Notification.permission !== "granted" && Notification.permission !== "denied") {
             Notification.requestPermission();
         }
@@ -298,35 +298,21 @@
         const savedActive = localStorage.getItem('dgb_1sec_active');
         if (savedActive) activeEmail = savedActive;
 
-        try {
-            // Lấy danh sách domain sống từ 1SecMail
-            const res = await fetch(`${API_URL}?action=getMessagesList&login=test&domain=1secmail.com`); 
-            // Mock call to warm up or get list
-            const domRes = await fetch(`${API_URL}?action=genRandomMailbox&count=1`);
-            const domData = await domRes.json();
-            
-            // 1SecMail cung cấp sẵn các domain chất lượng cao: 1secmail.com, 1secmail.org, 1secmail.net...
-            availableDomains = ['1secmail.com', '1secmail.org', '1secmail.net', 'wwjmp.com', 'esiand.com'];
-
-            if (activeEmail) {
-                document.getElementById('current-email').value = activeEmail;
-                renderHistory();
-                checkMail();
-            } else {
-                generateRandomEmail();
-            }
-
-            setInterval(checkMail, 5000); 
-        } catch (e) { 
-            document.getElementById('current-email').value = "Lỗi kết nối máy chủ 1SecMail!"; 
+        if (activeEmail) {
+            document.getElementById('current-email').value = activeEmail;
+            renderHistory();
+            checkMail();
+        } else {
+            generateRandomEmail();
         }
+
+        setInterval(checkMail, 4000); 
     }
 
     function randomStr(len) { return Math.random().toString(36).substring(2, 2 + len); }
 
-    async function generateRandomEmail() {
-        if(availableDomains.length === 0) availableDomains = ['1secmail.com'];
-        const randUser = randomStr(10);
+    function generateRandomEmail() {
+        const randUser = randomStr(9);
         const randDom = availableDomains[Math.floor(Math.random() * availableDomains.length)];
         setNewEmail(`${randUser}@${randDom}`);
     }
@@ -334,7 +320,6 @@
     function createCustomEmail() {
         const inputName = document.getElementById('custom-username').value.trim();
         if(!inputName) return alert("Vui lòng nhập tên email bạn muốn!");
-        if(availableDomains.length === 0) availableDomains = ['1secmail.com'];
         const randDom = availableDomains[Math.floor(Math.random() * availableDomains.length)];
         
         const cleanName = inputName.toLowerCase().replace(/[^a-z0-9.]/g, "");
@@ -411,8 +396,6 @@
             const mail = await res.json();
             document.getElementById('modal-subject').innerText = mail.subject || '(Không tiêu đề)';
             document.getElementById('modal-from').innerText = `Từ: ${mail.from} | Ngày: ${mail.date}`;
-            
-            // Ưu tiên hiển thị giao diện HTML, nếu không có thì hiện Text
             document.getElementById('modal-body').innerHTML = mail.htmlBody ? mail.htmlBody : mail.textBody.replace(/\n/g, '<br>');
             document.getElementById('mail-modal').style.display = 'flex';
         } catch (e) { alert("Không thể mở nội dung thư!"); }
