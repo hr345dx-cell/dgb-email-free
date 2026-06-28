@@ -227,7 +227,7 @@
 
     <div class="section">
         <div class="responsive-group">
-            <input type="text" id="current-email" readonly value="Đang kết nối API mới...">
+            <input type="text" id="current-email" readonly value="Đang lấy dữ liệu từ máy chủ sạch...">
             <div style="display: flex; gap: 8px; min-width: 220px; justify-content: space-between;">
                 <button onclick="copyEmail()" style="flex: 1;">Copy</button>
                 <button class="btn-rgb" onclick="generateRandomEmail()" style="flex: 2;">Đổi Ngẫu Nhiên</button>
@@ -235,7 +235,7 @@
         </div>
 
         <div class="responsive-group">
-            <input type="text" id="custom-username" placeholder="Tự đặt tên tùy ý (Ví dụ: giabao.vip)">
+            <input type="text" id="custom-username" placeholder="Tự đặt tên tùy ý (Ví dụ: giabao.pro)">
             <div style="display: flex; min-width: 220px;">
                 <button class="btn-rgb" onclick="createCustomEmail()" style="width: 100%;">Áp Dụng Tên</button>
             </div>
@@ -281,7 +281,6 @@
 </div>
 
 <script>
-    // 🔥 ĐÃ ĐỔI SANG API CỦA MAIL.GW (Kho miền mới hơn, vượt tường lửa ngon hơn)
     const API_URL = 'https://api.mail.gw';
     let realDomain = ''; 
     let activeAccount = null;
@@ -300,11 +299,9 @@
         if (savedActive) activeAccount = JSON.parse(savedActive);
 
         try {
-            // Lấy danh sách tên miền mới nhất từ hệ thống Mail.gw
             const res = await fetch(`${API_URL}/domains`);
             const data = await res.json();
             if (data['hydra:member'] && data['hydra:member'].length > 0) {
-                // Ưu tiên chọn các đuôi tên miền mới xuất hiện ở vị trí đầu tiên
                 realDomain = data['hydra:member'][0].domain; 
             }
 
@@ -316,16 +313,15 @@
                 generateRandomEmail();
             }
 
-            // Tự động kiểm tra hòm thư sau mỗi 5 giây
             setInterval(checkMail, 5000); 
-        } catch (e) { alert("Lỗi kết nối máy chủ Mail.gw!"); }
+        } catch (e) { document.getElementById('current-email').value = "Lỗi kết nối máy chủ API!"; }
     }
 
     function randomStr(len) { return Math.random().toString(36).substring(2, 2 + len); }
 
     function generateRandomEmail() { 
         if(!realDomain) return setTimeout(generateRandomEmail, 500);
-        registerNewEmail(randomStr(9)); // Tăng độ dài chuỗi ngẫu nhiên để không bị trùng
+        registerNewEmail(randomStr(9)); 
     }
 
     function createCustomEmail() {
@@ -337,21 +333,18 @@
 
     async function registerNewEmail(username) {
         const realEmail = `${username}@${realDomain}`;
-        // Tạo mật khẩu ngẫu nhiên cho từng hòm thư để tăng tính bảo mật, tránh lỗi trùng acc
         const password = randomStr(12);
 
         document.getElementById('current-email').value = "Đang khởi tạo...";
         lastMailCount = 0; 
 
         try {
-            // 1. Đăng ký hòm thư
             await fetch(`${API_URL}/accounts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ address: realEmail, password: password })
             });
             
-            // 2. Lấy Token đăng nhập
             const tokenRes = await fetch(`${API_URL}/token`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -374,7 +367,6 @@
             document.getElementById('mail-count').innerText = "0";
             checkMail();
         } catch (err) { 
-            alert("Tên email này đã bị trùng trên hệ thống toàn cầu, hãy bấm đổi tên khác!"); 
             generateRandomEmail();
         }
     }
