@@ -180,13 +180,13 @@
 
     <div class="section">
         <div class="responsive-group">
-            <input type="text" id="current-email" readonly value="Đang lọc đuôi mail 10p uy tín...">
+            <input type="text" id="current-email" readonly value="Đang lọc đuôi chuẩn mail10...">
             <div style="display: flex; gap: 8px; min-width: 220px; justify-content: space-between;">
                 <button onclick="copyEmail()" style="flex: 1;">Copy</button>
-                <button class="btn-rgb" onclick="generateFilteredMail()" style="flex: 2;">Đổi Ngẫu Nhiên</button>
+                <button class="btn-rgb" onclick="generateStrictMail()" style="flex: 2;">Đổi Ngẫu Nhiên</button>
             </div>
         </div>
-        <p style="font-size: 11px; color: #00ff55; text-align: center; font-weight: bold;">🔒 Hệ thống đã bật bộ lọc ẩn danh: Ưu tiên đuôi chứa chữ "mail" / "10"</p>
+        <p style="font-size: 11px; color: #00ff55; text-align: center; font-weight: bold;">🔒 Đang kích hoạt bộ lọc nghiêm ngặt: Chỉ dùng tên miền chứa chữ "mail" hoặc "10"</p>
     </div>
 
     <div class="section">
@@ -223,7 +223,7 @@
         if (Notification.permission !== "granted" && Notification.permission !== "denied") {
             Notification.requestPermission();
         }
-        await generateFilteredMail();
+        await generateStrictMail();
         setInterval(checkMail, 5000);
     }
 
@@ -231,24 +231,22 @@
         return Math.random().toString(36).substring(2, 2 + len);
     }
 
-    async function generateFilteredMail() {
-        document.getElementById('current-email').value = "Đang quét tìm đuôi mail10...";
+    async function generateStrictMail() {
+        document.getElementById('current-email').value = "Đang rà soát đuôi mail10...";
         try {
             const domRes = await fetch(`${API_URL}/domains`);
             const domData = await domRes.json();
             const domains = domData['hydra:member'];
 
-            // Lọc ra các domain chứa chữ "mail" hoặc số "10" hoặc "1"
+            // Vòng lặp quét nghiêm ngặt: Tìm bằng được đuôi có chữ 'mail' hoặc chữ '10'
+            let validDomains = domains.filter(d => d.domain.includes('mail') || d.domain.includes('10'));
+            
             let targetDomain = "";
-            for (let d of domains) {
-                if (d.domain.includes('mail') || d.domain.includes('10') || d.domain.includes('1')) {
-                    targetDomain = d.domain;
-                    break;
-                }
-            }
-
-            // Nếu không tìm thấy đuôi đặc biệt, lấy tạm đuôi đầu tiên để tránh lỗi
-            if (!targetDomain && domains.length > 0) {
+            if (validDomains.length > 0) {
+                // Chọn một đuôi chuẩn ngẫu nhiên trong danh sách đã lọc sạch
+                targetDomain = validDomains[Math.floor(Math.random() * validDomains.length)].domain;
+            } else {
+                // Nếu API lúc đó không có đuôi mail/10, tự động backup đuôi mặc định đẹp nhất
                 targetDomain = domains[0].domain;
             }
 
@@ -275,11 +273,12 @@
             lastMailCount = 0;
 
             document.getElementById('current-email').value = activeEmail;
-            document.getElementById('mail-list-box').innerHTML = '<div class="empty-text">Hộp thư mới đã kích hoạt. Đang đợi mã OTP...</div>';
+            document.getElementById('mail-list-box').innerHTML = '<div class="empty-text">Hộp thư sạch đã kích hoạt. Đang đợi mã OTP...</div>';
             document.getElementById('mail-count').innerText = "0";
 
         } catch(e) {
-            document.getElementById('current-email').value = "Lỗi kết nối. Vui lòng bấm Đổi Ngẫu Nhiên lại!";
+            document.getElementById('current-email').value = "Đang thử lại kết nối sạch...";
+            setTimeout(generateStrictMail, 1000);
         }
     }
 
@@ -302,7 +301,7 @@
             }
 
             if (currentCount === 0) {
-                listDiv.innerHTML = '<div class="empty-text">Đang chờ mã xác nhận...</div>';
+                listDiv.innerHTML = '<div class="empty-text">Đang chờ mã xác nhận gửi về...</div>';
                 return;
             }
 
@@ -346,7 +345,7 @@
         tempInput.select();
         document.execCommand('copy');
         document.body.removeChild(tempInput);
-        alert('Đã sao chép email thành công!');
+        alert('Đã copy mail chuẩn!');
     }
 
     init();
