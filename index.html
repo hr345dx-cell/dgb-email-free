@@ -106,17 +106,6 @@
             white-space: nowrap; 
         }
 
-        .btn-history-toggle {
-            border: 1px solid #00e1ff !important; 
-            color: #00e1ff !important; 
-            background: transparent !important; 
-            width: 100%;
-            white-space: normal !important; 
-            word-wrap: break-word;
-            line-height: 1.5; 
-            padding: 10px 15px;
-        }
-
         .btn-rgb {
             background: var(--rgb-gradient);
             background-size: 400%;
@@ -136,42 +125,6 @@
         }
 
         button:hover { background: #35477d; }
-
-        .menu-list-btn-container {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 10px;
-        }
-        
-        .dropdown-history {
-            display: none;
-            background: #0d1324;
-            border: 2px solid #00e1ff;
-            border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 15px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .history-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px;
-            border-bottom: 1px solid #1f2b4d;
-            font-size: 13px;
-        }
-        .history-item span {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            max-width: 75%;
-        }
-        .history-item.active {
-            color: #00ff55;
-            font-weight: bold;
-        }
 
         .mail-header {
             display: flex;
@@ -227,33 +180,13 @@
 
     <div class="section">
         <div class="responsive-group">
-            <input type="text" id="current-email" readonly value="Đang lấy domain bypass ẩn danh...">
+            <input type="text" id="current-email" readonly value="Đang tạo tài khoản Mail.tm...">
             <div style="display: flex; gap: 8px; min-width: 220px; justify-content: space-between;">
                 <button onclick="copyEmail()" style="flex: 1;">Copy</button>
-                <button class="btn-rgb" onclick="generateRandomEmail()" style="flex: 2;">Đổi Ngẫu Nhiên</button>
+                <button class="btn-rgb" onclick="generateNewMailTM()" style="flex: 2;">Đổi Ngẫu Nhiên</button>
             </div>
         </div>
-
-        <div class="responsive-group">
-            <input type="text" id="custom-username" placeholder="Tự đặt tên tùy ý (Ví dụ: giabao.pro)">
-            <div style="display: flex; min-width: 220px;">
-                <button class="btn-rgb" onclick="createCustomEmail()" style="width: 100%;">Áp Dụng Tên</button>
-            </div>
-        </div>
-
-        <div class="menu-list-btn-container">
-            <button onclick="toggleHistoryMenu()" class="btn-history-toggle">
-                📜 Bấm để đóng/mở Danh sách Email đã dùng
-            </button>
-        </div>
-
-        <div id="dropdown-history-box" class="dropdown-history">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h4 style="color: #00e1ff; font-size: 13px;">Chọn email cũ để xem lại:</h4>
-                <button onclick="clearHistory()" style="background: #ff0055; padding: 2px 8px; font-size: 10px; border-radius: 4px;">Xóa hết</button>
-            </div>
-            <div id="history-list-render"></div>
-        </div>
+        <p style="font-size: 11px; color: var(--text-muted); text-align: center;"> Hệ thống tự động tạo tài khoản bảo mật để nhận mail mượt mà hơn.</p>
     </div>
 
     <div class="section">
@@ -262,7 +195,7 @@
             <button onclick="checkMail()" style="padding: 6px 12px; font-size: 12px; border: 1px solid #2d3960;">🔄 Làm Mới</button>
         </div>
         <div id="mail-list-box">
-            <div class="empty-text">Đang chờ tin nhắn gửi về...</div>
+            <div class="empty-text">Đang chờ mã OTP từ hệ thống...</div>
         </div>
     </div>
 </div>
@@ -281,117 +214,84 @@
 </div>
 
 <script>
-    const API_URL = 'https://guerrero.to/api/v1';
+    const API_URL = 'https://api.mail.tm';
+    let token = "";
     let activeEmail = "";
-    let emailHistory = []; 
     let lastMailCount = 0;
-    let cachedDomains = [];
 
     async function init() {
         if (Notification.permission !== "granted" && Notification.permission !== "denied") {
             Notification.requestPermission();
         }
-
-        const savedHistory = localStorage.getItem('dgb_gr_history');
-        if (savedHistory) emailHistory = JSON.parse(savedHistory);
-
-        const savedActive = localStorage.getItem('dgb_gr_active');
-        if (savedActive) activeEmail = savedActive;
-
-        try {
-            const res = await fetch(`${API_URL}/domains`);
-            cachedDomains = await res.json();
-        } catch(e) {
-            cachedDomains = ['guerrero.to', 'coffeepancakes.xyz', 'lizardfury.com'];
-        }
-
-        if (activeEmail) {
-            document.getElementById('current-email').value = activeEmail;
-            renderHistory();
-            checkMail();
-        } else {
-            generateRandomEmail();
-        }
-
-        setInterval(checkMail, 5000); 
+        await generateNewMailTM();
+        setInterval(checkMail, 5000);
     }
 
     function randomStr(len) {
-        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-        let result = '';
-        for (let i = 0; i < len; i++) {
-            result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return result;
+        return Math.random().toString(36).substring(2, 2 + len);
     }
 
-    function generateRandomEmail() {
-        if(cachedDomains.length === 0) {
-            setTimeout(generateRandomEmail, 500);
-            return;
+    async function generateNewMailTM() {
+        document.getElementById('current-email').value = "Đang tạo email bypass...";
+        try {
+            // 1. Lấy danh sách tên miền sạch mới nhất
+            const domRes = await fetch(`${API_URL}/domains`);
+            const domData = await domRes.json();
+            const domain = domData['hydra:member'][0].domain;
+
+            // 2. Tạo một tài khoản mail ngẫu nhiên ngầm
+            const username = randomStr(9) + "@" + domain;
+            const password = randomStr(12);
+
+            const createRes = await fetch(`${API_URL}/accounts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address: username, password: password })
+            });
+
+            if(!createRes.ok) throw new Error("Không tạo được tài khoản");
+
+            // 3. Đăng nhập để lấy Token kết nối dữ liệu thư
+            const tokenRes = await fetch(`${API_URL}/token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address: username, password: password })
+            });
+            const tokenData = await tokenRes.json();
+            
+            token = tokenData.token;
+            activeEmail = username;
+            lastMailCount = 0;
+
+            document.getElementById('current-email').value = activeEmail;
+            document.getElementById('mail-list-box').innerHTML = '<div class="empty-text">Hộp thư mới đã sẵn sàng nhận OTP...</div>';
+            document.getElementById('mail-count').innerText = "0";
+
+        } catch(e) {
+            document.getElementById('current-email').value = "Lỗi hệ thống! Thử bấm lại đổi ngẫu nhiên.";
         }
-        const randUser = randomStr(9);
-        const randDom = cachedDomains[Math.floor(Math.random() * cachedDomains.length)];
-        setNewEmail(`${randUser}@${randDom}`);
-    }
-
-    function createCustomEmail() {
-        if(cachedDomains.length === 0) return alert("Hệ thống chưa tải xong tên miền, vui lòng đợi vài giây!");
-        const inputName = document.getElementById('custom-username').value.trim();
-        if(!inputName) return alert("Vui lòng nhập tên email bạn muốn!");
-        
-        const cleanName = inputName.toLowerCase().replace(/[^a-z0-9.]/g, "");
-        const randDom = cachedDomains[Math.floor(Math.random() * cachedDomains.length)];
-        setNewEmail(`${cleanName}@${randDom}`);
-        document.getElementById('custom-username').value = '';
-    }
-
-    function setNewEmail(email) {
-        activeEmail = email;
-        document.getElementById('current-email').value = email;
-        lastMailCount = 0;
-
-        localStorage.setItem('dgb_gr_active', activeEmail);
-
-        if (!emailHistory.includes(email)) {
-            emailHistory.push(email);
-            localStorage.setItem('dgb_gr_history', JSON.stringify(emailHistory));
-            renderHistory();
-        }
-
-        document.getElementById('mail-list-box').innerHTML = '<div class="empty-text">Hòm thư ẩn danh đã kích hoạt. Đang đợi mã OTP...</div>';
-        document.getElementById('mail-count').innerText = "0";
-        checkMail();
     }
 
     async function checkMail() {
-        if (!activeEmail) return;
-        const [username, domain] = activeEmail.split('@');
+        if (!token) return;
         try {
-            const res = await fetch(`${API_URL}/mailbox/${username}/${domain}`);
-            const messages = await res.json();
-            
-            if (!Array.isArray(messages)) return;
-            
+            const res = await fetch(`${API_URL}/messages`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const messages = data['hydra:member'];
+
             const currentCount = messages.length;
             document.getElementById('mail-count').innerText = currentCount;
             const listDiv = document.getElementById('mail-list-box');
-            
+
             if (currentCount > lastMailCount) {
-                document.title = `📩 (${currentCount}) Có OTP mới!`;
-                if (Notification.permission === "granted") {
-                    const latestMsg = messages[0]; 
-                    new Notification("⚡ DGB EMAIL BYPASS", {
-                        body: `Từ: ${latestMsg.from}\nTiêu đề: ${latestMsg.subject}`,
-                    });
-                }
-                lastMailCount = currentCount; 
+                document.title = `📩 (${currentCount}) Bạn có tin nhắn mới!`;
+                lastMailCount = currentCount;
             }
 
             if (currentCount === 0) {
-                listDiv.innerHTML = '<div class="empty-text">Hộp thư trống. Đang chờ mã xác nhận...</div>';
-                lastMailCount = 0;
-                document.title = "⚡ DGB EMAIL 10P RGB ⚡";
+                listDiv.innerHTML = '<div class="empty-text">Đang chờ tin nhắn gửi về...</div>';
                 return;
             }
 
@@ -400,67 +300,32 @@
                 const item = document.createElement('div');
                 item.className = 'mail-item';
                 item.innerHTML = `
-                    <div class="sender">Người gửi: ${msg.from}</div>
+                    <div class="sender">Từ: ${msg.from.address}</div>
                     <div class="subject">${msg.subject || '(Không tiêu đề)'}</div>
                 `;
                 item.onclick = () => openMail(msg.id);
                 listDiv.appendChild(item);
             });
-        } catch (error) { console.log("Đang quét thư đến..."); }
+        } catch (e) { console.log("Lỗi đồng bộ mail"); }
     }
 
     async function openMail(id) {
-        const [username, domain] = activeEmail.split('@');
         try {
-            const res = await fetch(`${API_URL}/message/${username}/${domain}/${id}`);
+            const res = await fetch(`${API_URL}/messages/${id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             const mail = await res.json();
             
             document.getElementById('modal-subject').innerText = mail.subject || '(Không tiêu đề)';
-            document.getElementById('modal-from').innerText = `Từ: ${mail.from}`;
+            document.getElementById('modal-from').innerText = `Từ: ${mail.from.address}`;
             
-            // Render nội dung HTML hoặc Text một cách an toàn
-            const bodyContent = mail.html || mail.text.replace(/\n/g, '<br>');
-            document.getElementById('modal-body').innerHTML = `<div style="color:#111; font-family:sans-serif;">${bodyContent}</div>`;
+            const bodyContent = mail.html ? mail.html[0] : mail.text;
+            document.getElementById('modal-body').innerHTML = `<div style="color:#111;">${bodyContent}</div>`;
             document.getElementById('mail-modal').style.display = 'flex';
-        } catch (e) { alert("Lỗi khi mở nội dung email!"); }
+        } catch (e) { alert("Không mở được thư!"); }
     }
 
     function closeModal() { document.getElementById('mail-modal').style.display = 'none'; }
-
-    function toggleHistoryMenu() {
-        const box = document.getElementById('dropdown-history-box');
-        box.style.display = box.style.display === 'block' ? 'none' : 'block';
-    }
-
-    function renderHistory() {
-        const historyList = document.getElementById('history-list-render');
-        historyList.innerHTML = '';
-        emailHistory.forEach((email) => {
-            const isActive = activeEmail === email;
-            const item = document.createElement('div');
-            item.className = `history-item ${isActive ? 'active' : ''}`;
-            item.innerHTML = `
-                <span>${email}</span>
-                <button class="btn-rgb" style="padding: 4px 10px; font-size:11px; color:#000;" onclick="switchEmail('${email}')">Chọn</button>
-            `;
-            historyList.appendChild(item);
-        });
-    }
-
-    function switchEmail(email) {
-        setNewEmail(email);
-        toggleHistoryMenu(); 
-    }
-
-    function clearHistory() {
-        if(confirm("Xóa lịch sử dụng các email cũ?")) {
-            emailHistory = [];
-            activeEmail = "";
-            localStorage.removeItem('dgb_gr_history');
-            localStorage.removeItem('dgb_gr_active');
-            generateRandomEmail();
-        }
-    }
 
     function copyEmail() {
         if(!activeEmail) return;
@@ -470,7 +335,7 @@
         tempInput.select();
         document.execCommand('copy');
         document.body.removeChild(tempInput);
-        alert('Đã copy mail bypass! Thử dán lại vào ô đăng ký nhé.');
+        alert('Đã copy mail Mail.tm!');
     }
 
     init();
