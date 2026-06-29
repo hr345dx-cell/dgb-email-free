@@ -180,13 +180,13 @@
 
     <div class="section">
         <div class="responsive-group">
-            <input type="text" id="current-email" readonly value="Đang tạo tài khoản Mail.tm...">
+            <input type="text" id="current-email" readonly value="Đang lọc đuôi mail 10p uy tín...">
             <div style="display: flex; gap: 8px; min-width: 220px; justify-content: space-between;">
                 <button onclick="copyEmail()" style="flex: 1;">Copy</button>
-                <button class="btn-rgb" onclick="generateNewMailTM()" style="flex: 2;">Đổi Ngẫu Nhiên</button>
+                <button class="btn-rgb" onclick="generateFilteredMail()" style="flex: 2;">Đổi Ngẫu Nhiên</button>
             </div>
         </div>
-        <p style="font-size: 11px; color: var(--text-muted); text-align: center;"> Hệ thống tự động tạo tài khoản bảo mật để nhận mail mượt mà hơn.</p>
+        <p style="font-size: 11px; color: #00ff55; text-align: center; font-weight: bold;">🔒 Hệ thống đã bật bộ lọc ẩn danh: Ưu tiên đuôi chứa chữ "mail" / "10"</p>
     </div>
 
     <div class="section">
@@ -195,7 +195,7 @@
             <button onclick="checkMail()" style="padding: 6px 12px; font-size: 12px; border: 1px solid #2d3960;">🔄 Làm Mới</button>
         </div>
         <div id="mail-list-box">
-            <div class="empty-text">Đang chờ mã OTP từ hệ thống...</div>
+            <div class="empty-text">Đang chờ mã OTP gửi về...</div>
         </div>
     </div>
 </div>
@@ -223,7 +223,7 @@
         if (Notification.permission !== "granted" && Notification.permission !== "denied") {
             Notification.requestPermission();
         }
-        await generateNewMailTM();
+        await generateFilteredMail();
         setInterval(checkMail, 5000);
     }
 
@@ -231,16 +231,28 @@
         return Math.random().toString(36).substring(2, 2 + len);
     }
 
-    async function generateNewMailTM() {
-        document.getElementById('current-email').value = "Đang tạo email bypass...";
+    async function generateFilteredMail() {
+        document.getElementById('current-email').value = "Đang quét tìm đuôi mail10...";
         try {
-            // 1. Lấy danh sách tên miền sạch mới nhất
             const domRes = await fetch(`${API_URL}/domains`);
             const domData = await domRes.json();
-            const domain = domData['hydra:member'][0].domain;
+            const domains = domData['hydra:member'];
 
-            // 2. Tạo một tài khoản mail ngẫu nhiên ngầm
-            const username = randomStr(9) + "@" + domain;
+            // Lọc ra các domain chứa chữ "mail" hoặc số "10" hoặc "1"
+            let targetDomain = "";
+            for (let d of domains) {
+                if (d.domain.includes('mail') || d.domain.includes('10') || d.domain.includes('1')) {
+                    targetDomain = d.domain;
+                    break;
+                }
+            }
+
+            // Nếu không tìm thấy đuôi đặc biệt, lấy tạm đuôi đầu tiên để tránh lỗi
+            if (!targetDomain && domains.length > 0) {
+                targetDomain = domains[0].domain;
+            }
+
+            const username = randomStr(8) + "@" + targetDomain;
             const password = randomStr(12);
 
             const createRes = await fetch(`${API_URL}/accounts`, {
@@ -249,9 +261,8 @@
                 body: JSON.stringify({ address: username, password: password })
             });
 
-            if(!createRes.ok) throw new Error("Không tạo được tài khoản");
+            if(!createRes.ok) throw new Error();
 
-            // 3. Đăng nhập để lấy Token kết nối dữ liệu thư
             const tokenRes = await fetch(`${API_URL}/token`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -264,11 +275,11 @@
             lastMailCount = 0;
 
             document.getElementById('current-email').value = activeEmail;
-            document.getElementById('mail-list-box').innerHTML = '<div class="empty-text">Hộp thư mới đã sẵn sàng nhận OTP...</div>';
+            document.getElementById('mail-list-box').innerHTML = '<div class="empty-text">Hộp thư mới đã kích hoạt. Đang đợi mã OTP...</div>';
             document.getElementById('mail-count').innerText = "0";
 
         } catch(e) {
-            document.getElementById('current-email').value = "Lỗi hệ thống! Thử bấm lại đổi ngẫu nhiên.";
+            document.getElementById('current-email').value = "Lỗi kết nối. Vui lòng bấm Đổi Ngẫu Nhiên lại!";
         }
     }
 
@@ -286,12 +297,12 @@
             const listDiv = document.getElementById('mail-list-box');
 
             if (currentCount > lastMailCount) {
-                document.title = `📩 (${currentCount}) Bạn có tin nhắn mới!`;
+                document.title = `📩 (${currentCount}) Bạn có thư mới!`;
                 lastMailCount = currentCount;
             }
 
             if (currentCount === 0) {
-                listDiv.innerHTML = '<div class="empty-text">Đang chờ tin nhắn gửi về...</div>';
+                listDiv.innerHTML = '<div class="empty-text">Đang chờ mã xác nhận...</div>';
                 return;
             }
 
@@ -306,7 +317,7 @@
                 item.onclick = () => openMail(msg.id);
                 listDiv.appendChild(item);
             });
-        } catch (e) { console.log("Lỗi đồng bộ mail"); }
+        } catch (e) { console.log("Lỗi tải tin nhắn"); }
     }
 
     async function openMail(id) {
@@ -320,7 +331,7 @@
             document.getElementById('modal-from').innerText = `Từ: ${mail.from.address}`;
             
             const bodyContent = mail.html ? mail.html[0] : mail.text;
-            document.getElementById('modal-body').innerHTML = `<div style="color:#111;">${bodyContent}</div>`;
+            document.getElementById('modal-body').innerHTML = `<div style="color:#111; font-family:sans-serif;">${bodyContent}</div>`;
             document.getElementById('mail-modal').style.display = 'flex';
         } catch (e) { alert("Không mở được thư!"); }
     }
@@ -335,7 +346,7 @@
         tempInput.select();
         document.execCommand('copy');
         document.body.removeChild(tempInput);
-        alert('Đã copy mail Mail.tm!');
+        alert('Đã sao chép email thành công!');
     }
 
     init();
