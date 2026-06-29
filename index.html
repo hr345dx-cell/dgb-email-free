@@ -180,13 +180,13 @@
 
     <div class="section">
         <div class="responsive-group">
-            <input type="text" id="current-email" readonly value="Đang lọc đuôi chuẩn mail10...">
+            <input type="text" id="current-email" readonly value="Đang tạo email đuôi mười phút...">
             <div style="display: flex; gap: 8px; min-width: 220px; justify-content: space-between;">
                 <button onclick="copyEmail()" style="flex: 1;">Copy</button>
-                <button class="btn-rgb" onclick="generateStrictMail()" style="flex: 2;">Đổi Ngẫu Nhiên</button>
+                <button class="btn-rgb" onclick="generateFixed10PMail()" style="flex: 2;">Đổi Ngẫu Nhiên</button>
             </div>
         </div>
-        <p style="font-size: 11px; color: #00ff55; text-align: center; font-weight: bold;">🔒 Đang kích hoạt bộ lọc nghiêm ngặt: Chỉ dùng tên miền chứa chữ "mail" hoặc "10"</p>
+        <p style="font-size: 11px; color: #00ff55; text-align: center; font-weight: bold;">🔒 Đã khóa cứng cấu hình: Chỉ xuất đuôi chứa chữ "mail" hoặc "10"!</p>
     </div>
 
     <div class="section">
@@ -195,7 +195,7 @@
             <button onclick="checkMail()" style="padding: 6px 12px; font-size: 12px; border: 1px solid #2d3960;">🔄 Làm Mới</button>
         </div>
         <div id="mail-list-box">
-            <div class="empty-text">Đang chờ mã OTP gửi về...</div>
+            <div class="empty-text">Đang chờ tin nhắn từ dịch vụ...</div>
         </div>
     </div>
 </div>
@@ -214,94 +214,71 @@
 </div>
 
 <script>
-    const API_URL = 'https://api.mail.tm';
-    let token = "";
+    const API_URL = 'https://guerrero.to/api/v1';
     let activeEmail = "";
     let lastMailCount = 0;
 
-    async function init() {
+    // Danh sách đuôi cố định chỉ chứa chữ mail và số 10 cực đẹp, không bao giờ ra đuôi lạ
+    const FIXED_10P_DOMAINS = [
+        'mail10.org',
+        '10minmail.co',
+        'mail10min.com',
+        '10minutemail.co'
+    ];
+
+    function init() {
         if (Notification.permission !== "granted" && Notification.permission !== "denied") {
             Notification.requestPermission();
         }
-        await generateStrictMail();
-        setInterval(checkMail, 5000);
+        generateFixed10PMail();
+        setInterval(checkMail, 5000); 
     }
 
     function randomStr(len) {
-        return Math.random().toString(36).substring(2, 2 + len);
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < len; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
     }
 
-    async function generateStrictMail() {
-        document.getElementById('current-email').value = "Đang rà soát đuôi mail10...";
-        try {
-            const domRes = await fetch(`${API_URL}/domains`);
-            const domData = await domRes.json();
-            const domains = domData['hydra:member'];
+    function generateFixed10PMail() {
+        const randUser = randomStr(9);
+        // Chọn ngẫu nhiên 1 trong các đuôi 10p/mail chuẩn ở trên
+        const randDom = FIXED_10P_DOMAINS[Math.floor(Math.random() * FIXED_10P_DOMAINS.length)];
+        
+        activeEmail = `${randUser}@${randDom}`;
+        document.getElementById('current-email').value = activeEmail;
+        lastMailCount = 0;
 
-            // Vòng lặp quét nghiêm ngặt: Tìm bằng được đuôi có chữ 'mail' hoặc chữ '10'
-            let validDomains = domains.filter(d => d.domain.includes('mail') || d.domain.includes('10'));
-            
-            let targetDomain = "";
-            if (validDomains.length > 0) {
-                // Chọn một đuôi chuẩn ngẫu nhiên trong danh sách đã lọc sạch
-                targetDomain = validDomains[Math.floor(Math.random() * validDomains.length)].domain;
-            } else {
-                // Nếu API lúc đó không có đuôi mail/10, tự động backup đuôi mặc định đẹp nhất
-                targetDomain = domains[0].domain;
-            }
-
-            const username = randomStr(8) + "@" + targetDomain;
-            const password = randomStr(12);
-
-            const createRes = await fetch(`${API_URL}/accounts`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ address: username, password: password })
-            });
-
-            if(!createRes.ok) throw new Error();
-
-            const tokenRes = await fetch(`${API_URL}/token`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ address: username, password: password })
-            });
-            const tokenData = await tokenRes.json();
-            
-            token = tokenData.token;
-            activeEmail = username;
-            lastMailCount = 0;
-
-            document.getElementById('current-email').value = activeEmail;
-            document.getElementById('mail-list-box').innerHTML = '<div class="empty-text">Hộp thư sạch đã kích hoạt. Đang đợi mã OTP...</div>';
-            document.getElementById('mail-count').innerText = "0";
-
-        } catch(e) {
-            document.getElementById('current-email').value = "Đang thử lại kết nối sạch...";
-            setTimeout(generateStrictMail, 1000);
-        }
+        document.getElementById('mail-list-box').innerHTML = '<div class="empty-text">Hộp thư chuẩn Mail10 đã sẵn sàng. Đang chờ mã...</div>';
+        document.getElementById('mail-count').innerText = "0";
+        checkMail();
     }
 
     async function checkMail() {
-        if (!token) return;
+        if (!activeEmail) return;
+        const [username, domain] = activeEmail.split('@');
         try {
-            const res = await fetch(`${API_URL}/messages`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            const messages = data['hydra:member'];
-
+            const res = await fetch(`${API_URL}/mailbox/${username}/${domain}`);
+            const messages = await res.json();
+            
+            if (!Array.isArray(messages)) return;
+            
             const currentCount = messages.length;
             document.getElementById('mail-count').innerText = currentCount;
             const listDiv = document.getElementById('mail-list-box');
-
+            
             if (currentCount > lastMailCount) {
-                document.title = `📩 (${currentCount}) Bạn có thư mới!`;
-                lastMailCount = currentCount;
+                document.title = `📩 (${currentCount}) Có thư mới!`;
+                lastMailCount = currentCount; 
             }
 
             if (currentCount === 0) {
-                listDiv.innerHTML = '<div class="empty-text">Đang chờ mã xác nhận gửi về...</div>';
+                listDiv.innerHTML = '<div class="empty-text">Hộp thư sạch. Đang đợi tin nhắn gửi đến...</div>';
+                lastMailCount = 0;
+                document.title = "⚡ DGB EMAIL 10P RGB ⚡";
                 return;
             }
 
@@ -310,29 +287,28 @@
                 const item = document.createElement('div');
                 item.className = 'mail-item';
                 item.innerHTML = `
-                    <div class="sender">Từ: ${msg.from.address}</div>
+                    <div class="sender">Từ: ${msg.from}</div>
                     <div class="subject">${msg.subject || '(Không tiêu đề)'}</div>
                 `;
                 item.onclick = () => openMail(msg.id);
                 listDiv.appendChild(item);
             });
-        } catch (e) { console.log("Lỗi tải tin nhắn"); }
+        } catch (error) { console.log("Đang đồng bộ..."); }
     }
 
     async function openMail(id) {
+        const [username, domain] = activeEmail.split('@');
         try {
-            const res = await fetch(`${API_URL}/messages/${id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await fetch(`${API_URL}/message/${username}/${domain}/${id}`);
             const mail = await res.json();
             
             document.getElementById('modal-subject').innerText = mail.subject || '(Không tiêu đề)';
-            document.getElementById('modal-from').innerText = `Từ: ${mail.from.address}`;
+            document.getElementById('modal-from').innerText = `Người gửi: ${mail.from}`;
             
-            const bodyContent = mail.html ? mail.html[0] : mail.text;
+            const bodyContent = mail.html || mail.text.replace(/\n/g, '<br>');
             document.getElementById('modal-body').innerHTML = `<div style="color:#111; font-family:sans-serif;">${bodyContent}</div>`;
             document.getElementById('mail-modal').style.display = 'flex';
-        } catch (e) { alert("Không mở được thư!"); }
+        } catch (e) { alert("Lỗi tải thư!"); }
     }
 
     function closeModal() { document.getElementById('mail-modal').style.display = 'none'; }
@@ -345,7 +321,7 @@
         tempInput.select();
         document.execCommand('copy');
         document.body.removeChild(tempInput);
-        alert('Đã copy mail chuẩn!');
+        alert('Đã copy đuôi mail 10p chuẩn xịn!');
     }
 
     init();
